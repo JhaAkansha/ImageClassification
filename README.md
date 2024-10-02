@@ -1,4 +1,4 @@
-# WHat does this project do?
+# What does this project do?
 This is a project which performs image classification on cats and doga images using Xception CNN. FastAPI is used to enable user to upload a photograph and the model is then run on the input image to give the output as 'Cat' or 'Dog'
 
 # How to use this project?
