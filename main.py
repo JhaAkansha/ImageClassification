@@ -1,53 +1,35 @@
 from fastapi import FastAPI
-from enum import Enum
+from pydantic import BaseModel
+from fastapi import FastAPI, File, UploadFile
+import keras
+from PIL import Image
+import io
+import tensorflow as tf
 
+
+target_size = (180, 180)
+print(keras.__version__)
+print(tf.__version__)
+# model = keras.models.load_model("catsvsdogsmodel.keras")
+model = keras.models.load_model("catsvsdogsmodel\model.weights.h5")
 app = FastAPI()
 
 
-@app.get("/")
-def root():
-    return {"message": "Hello World"}
-
-#Path Parameter
-@app.get("/items/{item_id}")
-async def read_item(item_id: int):
-    return {"item_id": item_id}
-
-
-#Predefined values
-class ModelName(str, Enum):
-    alexnet = "alexnet"
-    resnet = "resnet"
-    lenet = "lenet"
-
-@app.get("/models/{model_name}")
-async def get_model(model_name: ModelName):
-    if model_name is ModelName.alexnet:
-        return {"model_name": model_name, "message": "Deep Learning FTW!"}
-
-    if model_name.value == "lenet":
-        return {"model_name": model_name, "message": "LeCNN all the images"}
-
-    return {"model_name": model_name, "message": "Have some residuals"}
-
-
-fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
-
-@app.get("/items/")
-async def read_item(skip: int = 1 , limit: int = 10):    #default value skip = 0 limit = 10
-    return fake_items_db[skip : skip + limit]
-
-
-#Multiple path and query parameters
-@app.get("/users/{user_id}/items/{item_id}")
-async def read_user_item(
-    user_id: int, item_id: str, q: str | None = None, short: bool = False
-):
-    item = {"item_id": item_id, "owner_id": user_id}
-    if q:
-        item.update({"q": q})
-    if not short:
-        item.update(
-            {"description": "This is an amazing item that has a long description"}
-        )
-    return item
+@app.post("/classify/cats-and-dogs")
+async def root(file: UploadFile = File(...)):
+    contents = await file.read()
+    
+    # prepare image
+    img = Image.open(io.BytesIO(contents))
+    img = img.convert("RGB")
+    img = img.resize(target_size, Image.NEAREST)
+    
+    # make predictions
+    img_array = keras.utils.img_to_array(img)
+    img_array = tf.expand_dims(img_array, 0)
+    predictions = model.predict(img_array)
+    
+    # calculate score
+    score = float(tf.sigmoid(predictions[0][0]))
+    print(f"This image is {100 * (1 - score):.2f}% cat and {100 * score:.2f}% dog.")
+    return {"probabilities": [{"cat": 100 * (1 - score)}, {"dog": 100 * score}]}
